@@ -317,16 +317,21 @@ class GaloisField:
         groups = {}
         # построить все группы
         for power in sorted(list(powers.values())):
-            sub_powers = factorize(power)
+
             if power in groups or power == 1:
                 continue
-            groups[power] = [self.elements[0]]
+            sub_powers = factorize(power)
+            # инициализируем новую группу
+            groups[power] = LoopGroup(power)
+            # сразу добавляем 1
+            groups[power].add_element(self.elements[0])
+
+            # ищем образующие и элементы группы
             for kvp in powers.items():
-                # print(kvp)
-                # if element has power/subpower
-                if kvp[1] == power or kvp[1] in sub_powers:
-                    if self.elements[kvp[0]] not in groups[power]:
-                        groups[power].append(self.elements[kvp[0]])
+                if kvp[1] == power:  # образующий
+                    groups[power].add_root(self.elements[kvp[0]])
+                elif kvp[1] in sub_powers:  # просто элемент
+                    groups[power].add_element(self.elements[kvp[0]])
         return groups
 
 
@@ -336,11 +341,23 @@ class LoopGroup:
         self.elements = []  # все элементы
         self.roots = []  # образующие
 
+    def add_root(self, element: GaloisFieldElement):
+        if element not in self.roots:
+            self.roots.append(element)
+            self.add_element(element)
+
+    def add_element(self, element: GaloisFieldElement):
+        if element not in self.elements:
+            self.elements.append(element)
+
     def __repr__(self):
         forming = []
         for a in self.roots:
             forming.append(f"<{a.fancy()}>")
         return f"H{self.power} = {' = '.join(forming)}"
+
+    def __eq__(self, other):
+        return self.power == other.power
 
 
 def generate_unreducible(p, n):
@@ -366,10 +383,10 @@ if __name__ == "__main__":
 
     # print((p1 * p2).fancy())
 
-    # generate_unreducible(2, 6)
+    generate_unreducible(3, 2)
 
-    f33 = GaloisField(3, 2)
-    f33.set_irreducible([2, -2, 1])
+    f33 = GaloisField(3, 3)
+    f33.set_irreducible([2, -2, 1, 1])
 
     # f33.generate_all_elements()
 
