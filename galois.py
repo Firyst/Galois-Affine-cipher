@@ -1,5 +1,5 @@
 from itertools import product
-
+from random import randint
 
 def is_prime(n):
     """
@@ -41,6 +41,7 @@ class GaloisFieldElement:
 
     def __eq__(self, other):
         return self.p == other.p and self.coefficients == other.coefficients
+
     def __add__(self, other):
         """
         Сложение многочленов в поле Галуа
@@ -48,15 +49,40 @@ class GaloisFieldElement:
         :return: многочлен после сложения
         """
         max_len = max(len(self.coefficients), len(other.coefficients))
+        k1 = self.coefficients
+        k2 = other.coefficients
+
+        while (len(k1)) < max_len:
+            k1 = [0] + k1
+
+        while (len(k2)) < max_len:
+            k2 = [0] + k2
+
         sum_coeffs = [0] * max_len
         for i in range(max_len):
-            a = self.coefficients[i] if i < len(self.coefficients) else 0
-            b = other.coefficients[i] if i < len(other.coefficients) else 0
-            sum_coeffs[i] = (a + b) % self.p
+            sum_coeffs[i] = (k1[i] + k2[i]) % self.p
 
         while len(sum_coeffs) > 1 and sum_coeffs[0] == 0:
             sum_coeffs = sum_coeffs[1:]
         return GaloisFieldElement(sum_coeffs, self.p, self.irreducible)
+
+    def __neg__(self):
+        """
+        :return: Противоположный элемент.
+        """
+        new_coefficients = self.coefficients.copy()
+        for i in range(len(new_coefficients)):
+            new_coefficients[i] = (-new_coefficients[i]) % self.p
+
+        return GaloisFieldElement(new_coefficients, self.p, self.irreducible)
+
+    def __sub__(self, other):
+        """
+        Вычитание
+        :param other: второй многочлен
+        :return:
+        """
+        return self + (-other)
 
     @staticmethod
     def simple_mult(coefs1, coefs2, p):
@@ -74,7 +100,7 @@ class GaloisFieldElement:
                 prod_coeffs[i + j] %= p
 
         # убрать страшие нулевые коэффициенты (понизить степень)
-        while prod_coeffs[0] == 0:
+        while len(prod_coeffs) and prod_coeffs[0] == 0:
             prod_coeffs = prod_coeffs[1:]
 
         return prod_coeffs
@@ -85,6 +111,8 @@ class GaloisFieldElement:
         :param other: второй многочлен
         :return: резульат умножения
         """
+        if self.coefficients == [0, ] or other.coefficients == [0, ]:
+            return GaloisFieldElement([0, ], self.p, self.irreducible)
         def reduce_pow(poly):
             """
             Наивное понижение старшей степени многочлена (как минимум на 1)
@@ -95,9 +123,7 @@ class GaloisFieldElement:
             irr_pow = len(poly.irreducible)  # степень неприводимого МЧ
 
             # ищем старшую степень частного, чтобы найти остаток
-            irr_mul = self.simple_mult(poly.irreducible, ([1] + [0] * (start_pow - irr_pow - 1)), self.p)
-
-            irr = GaloisFieldElement(irr_mul, self.p, None)
+            irr = GaloisFieldElement(self.irreducible + [0] * (start_pow - irr_pow), self.p, None)
 
             new_poly = poly + irr
 
@@ -117,21 +143,6 @@ class GaloisFieldElement:
             m_poly = reduce_pow(m_poly)
 
         return m_poly
-
-    def inverse_mod(self, a, mod):
-        # Расширенный алгоритм Евклида для нахождения обратного элемента
-        if a == 0:
-            raise ValueError("Обратный элемент не существует")
-
-        lm, hm = 1, 0
-        low, high = a % mod, mod
-        while low > 1:
-            ratio = high // low
-            nm, new = hm - lm * ratio, high - low * ratio
-            hm, lm = lm, nm
-            high, low = low, new
-
-        return lm % mod
 
     def __str__(self):
         return ' + '.join(f'{coeff}x^{i}' if i > 0 else str(coeff)
@@ -162,12 +173,6 @@ class GaloisFieldElement:
                 terms.append(term)
         return ' + '.join(reversed(terms)) if terms else '0'
 
-    def _mod_inverse(self, a):
-        # Нахождение обратного элемента к a в поле Галуа
-        for i in range(self.p):
-            if (a * i) % self.p == 1:
-                return i
-        return 1  # Если обратного не существует, возвращаем 1 (не должно случиться в правильно настроенном поле Галуа)
 
     def __repr__(self):
         return f"elem(p={self.p}, n={len(self.irreducible) - 1}): {self.fancy()}"
@@ -181,17 +186,26 @@ class GaloisField:
 
         # элементы поля
         self.elements = []
-        self.indexed = {}  # словарь кожффициенты:индекс
+        self.indexed = {}  # словарь коэффициенты:индекс
 
         # таблицы сложения и умножения
         self.cached_add = {}
         self.cached_mul = {}
+
+        # таблица обратных
+        self.inverse_table = {}
 
         # задать и проверить неприводимый
         if irreducible is None:
             self.irreducible = list()
         else:
             self.set_irreducible(irreducible)
+
+    def get(self, index: int) -> GaloisFieldElement:
+        if index < 0:
+            return GaloisFieldElement([0, ], self.p, self.irreducible)
+        else:
+            return self.elements[index]
 
     def set_irreducible(self, coefficients):
         """
@@ -217,6 +231,8 @@ class GaloisField:
         # убедиться, что заданный МЧ нельзя получить произведением
         self.build_mul_table()
 
+        self.build_add_table()
+
         self.ready = True
 
     def check_ready(self):
@@ -239,7 +255,30 @@ class GaloisField:
             self.indexed[tuple(element.coefficients)] = i
 
     def build_add_table(self):
-        pass
+        """
+        Строит внутреннюю аддитивную таблицу (cached_add)
+        :return: None
+        """
+        for num_a in range(0, len(self.elements)):
+            for num_b in range(0, num_a + 1):
+                elem_a = self.elements[num_a]
+                elem_b = self.elements[num_b]
+
+                self.cached_add[(num_a, num_b)] = elem_a + elem_b
+
+    def get_add(self, a, b) -> GaloisFieldElement:
+        """
+        Быстрое сложение
+        :param a:
+        :param b:
+        :return:
+        """
+        if a < b:
+            a, b = b, a
+
+        p_a = self.get_element(a)
+        p_b = self.get_element(b)
+        return self.cached_add[(p_a, p_b)]
 
     def build_mul_table(self):
         """
@@ -247,7 +286,7 @@ class GaloisField:
         :return: None
         """
         for num_a in range(0, len(self.elements)):
-            for num_b in  range(0, num_a + 1):
+            for num_b in range(0, num_a + 1):
                 elem_a = self.elements[num_a]
                 elem_b = self.elements[num_b]
 
@@ -255,16 +294,53 @@ class GaloisField:
                 if irr_test == self.irreducible:
                     raise ArithmeticError("Многочлен не является неприводимым! (является произведениием элементов поля)")
 
-                self.cached_mul[(num_a, num_b)] = elem_a * elem_b
+                mult_res = elem_a * elem_b
+                self.cached_mul[(num_a, num_b)] = mult_res
 
-    def get_element(self, data):
+                # запоминаем обратные элементы
+                if mult_res.coefficients == [1]:
+                    if num_a not in self.inverse_table:
+                        self.inverse_table[num_a] = elem_b
+                    if num_b not in self.inverse_table:
+                        self.inverse_table[num_b] = elem_a
+
+    def get_inv(self, data) -> GaloisFieldElement:
+        """
+        Найти обратный
+        :param data: ввод: число/кортеж/список
+        :return: обратный ему элемент
+        """
+        return self.inverse_table[self.get_element(data)]
+
+    def get_mult(self, a, b) -> GaloisFieldElement:
+        """
+        Быстрое умножение
+        :param a:
+        :param b:
+        :return:
+        """
+
+        a, b = self.get_element(a), self.get_element(b)
+
+        if a == -1 or b == -1:
+            return GaloisFieldElement([0], self.p, self.irreducible)
+
+        if a < b:
+            a, b = b, a
+
+        p_a = self.get_element(a)
+        p_b = self.get_element(b)
+
+        return self.cached_mul[(p_a, p_b)]
+
+    def get_element(self, data) -> int:
         """
         Проверяет, дан ли индекс элемента, или коэффициенты
         :param data: ввод: число/кортеж/список
         :return: индекс элемента
         """
         if type(data) == int:
-            if 0 <= data < len(self.elements):
+            if -1 <= data < len(self.elements):
                 return data
             else:
                 raise IndexError("Неверный индекс элемента поле Галуа.")
@@ -273,12 +349,22 @@ class GaloisField:
             data = tuple(data)
 
         if type(data) == tuple:
+            if data == (0, ):
+                return -1
             if data in self.indexed:
                 return self.indexed[data]
             else:
                 raise KeyError("Неверный элемент поле Галуа")
 
-        return None
+        if type(data) == GaloisFieldElement:
+            if data.coefficients == [0, ]:
+                return -1
+            try:
+                return self.indexed[tuple(data.coefficients)]
+            except IndexError:
+                raise KeyError("Неверный элемент поле Галуа")
+
+        return -1
 
     def get_power(self, member):
         """
@@ -360,7 +446,7 @@ class LoopGroup:
         return self.power == other.power
 
 
-def generate_unreducible(p, n):
+def generate_irreducible1(p, n):
     test_field = GaloisField(p, n)
     for coefficients in product(range(p), repeat=(n)):
 
@@ -371,6 +457,19 @@ def generate_unreducible(p, n):
             except ArithmeticError:
                 continue
 
+
+def generate_irreducible2(p, n):
+    test_field = GaloisField(p, n)
+    while not test_field.ready:
+        tester = [randint(1, p - 1)]
+        for i in range(n):
+            tester.append(randint(0, p - 1))
+            try:
+                test_field.set_irreducible(tester)
+                # print(tester)
+                return tester
+            except ArithmeticError:
+                continue
 
 
 if __name__ == "__main__":
@@ -383,7 +482,7 @@ if __name__ == "__main__":
 
     # print((p1 * p2).fancy())
 
-    generate_unreducible(3, 2)
+    generate_irreducible2(3, 2)
 
     f33 = GaloisField(3, 3)
     f33.set_irreducible([2, -2, 1, 1])

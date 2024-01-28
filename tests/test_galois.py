@@ -1,23 +1,30 @@
 from galois import *
 import pytest
 
+
 def test_prime_1():
     assert is_prime(2)
+
 
 def test_prime_2():
     assert is_prime(3)
 
+
 def test_prime_3():
     assert is_prime(13)
+
 
 def test_prime_4():
     assert is_prime(43)
 
+
 def test_prime_5():
     assert not is_prime(36)
 
+
 def test_fact_1():
     assert factorize(12) == [2, 3, 4, 6]
+
 
 def test_simple_mult_1():
     empty_poly = GaloisFieldElement([], 999, [])
@@ -102,6 +109,7 @@ def test_mul_8():
     p2 = GaloisFieldElement([2, 2], 3, [2, -2, 1])
     assert (p1 * p2).coefficients == [1]
 
+
 #
 # p = 2, n = 3
 #
@@ -129,6 +137,7 @@ def test_mul_12():
     p1 = GaloisFieldElement([1, 1, 1], 2, [1, 0, 1, 1])
     p2 = GaloisFieldElement([1, 1, 1], 2, [1, 0, 1, 1])
     assert (p1 * p2).coefficients == [1, 1]
+
 
 #
 # тест поля
@@ -161,10 +170,57 @@ def test_mul_table_1():
     assert len(field.cached_mul) == 28
 
 
+def test_cache_1():
+    field = GaloisField(2, 3)
+    field.set_irreducible([1, 0, 1, 1])
+
+    assert field.elements[2] * field.elements[4] == field.get_mult(4, 2)
+    assert field.elements[2] * field.elements[4] == field.get_mult(2, 4)
+    assert field.elements[3] * field.elements[6] == field.get_mult(3, 6)
+    assert field.elements[6] * field.elements[3] == field.get_mult(6, 3)
+    assert field.elements[0] * field.elements[1] == field.get_mult(0, 1)
+
+
+def test_inv_size():
+    field = GaloisField(2, 3)
+    field.set_irreducible([1, 0, 1, 1])
+
+    assert len(field.inverse_table) == len(field.elements)
+
+
+def test_neg():
+    field = GaloisField(2, 3)
+    field.set_irreducible([1, 0, 1, 1])
+
+    for i in range(1, len(field.elements)):
+        assert (field.elements[i] - field.elements[i]).coefficients == [0, ]
+
+
+def test_inv():
+    field = GaloisField(2, 3)
+    field.set_irreducible([1, 0, 1, 1])
+
+    for i in range(1, len(field.elements)):
+        inv = field.get_inv(i)
+        assert field.get_mult(i, inv).coefficients == [1]
+
+
+def test_zeros():
+    field = GaloisField(2, 3)
+    field.set_irreducible([1, 0, 1, 1])
+
+    assert field.get_mult([0], 2).coefficients == [0, ]
+    assert field.get_mult([0], 3).coefficients == [0, ]
+    assert field.get_mult(-1, 2).coefficients == [0, ]
+    assert field.get_mult(GaloisFieldElement([0, ], 777, []), 2).coefficients == [0, ]
+
+
+
 def test_powers_0():
     field = GaloisField(2, 4)
     field.set_irreducible([1, 0, 0, 1, 1])
     assert field.get_power([1]) == 1
+
 
 def test_powers_1():
     field = GaloisField(2, 4)
