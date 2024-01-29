@@ -51,7 +51,7 @@ class ProgramWindow(QMainWindow):
         # добавить 0 элемент
         item_poly0 = QTableWidgetItem("0")
         item_poly0.setFlags(Qt.ItemIsEditable)
-        item_pow0 = QTableWidgetItem("-1")
+        item_pow0 = QTableWidgetItem("0")
         item_pow0.setFlags(Qt.ItemIsEditable)
         self.element_table.setItem(0, 1, item_poly0)
         self.element_table.setItem(0, 0, item_pow0)
@@ -61,7 +61,7 @@ class ProgramWindow(QMainWindow):
             item_poly = QTableWidgetItem(element.fancy())
             item_poly.setFlags(Qt.ItemIsEditable)  # выключаем возможность редактировать элемент
 
-            item_pow = QTableWidgetItem(str(i))  # порядок
+            item_pow = QTableWidgetItem(str(i + 1))  # порядок
             item_pow.setFlags(Qt.ItemIsEditable)  # выключаем возможность редактировать элемент
 
             self.element_table.setItem(i + 1, 1, item_poly)
@@ -279,7 +279,7 @@ class ProgramWindow(QMainWindow):
         # получить алфавит
         abc = self.line_abc.text()
         if len(abc) != (1 + len(self.field.elements)):
-            d = WarnDialog("Ошибка", f"Модуль алфавита должен быть равен {self.field.p * self.field.n}")
+            d = WarnDialog("Ошибка", f"Модуль алфавита должен быть равен {self.field.p ** self.field.n}")
             d.exec_()
             return
 
@@ -300,7 +300,16 @@ class ProgramWindow(QMainWindow):
         self.text_cipher.setPlainText(encrypted)
 
     def encryptB(self):
-        pass
+        # получить ключи
+        a = self.check_poly(self.key_a.text())
+        b = self.check_poly(self.key_b.text())
+        if a is None or b is None:
+            return
+
+        input_text = self.text_open.toPlainText()
+
+        encrypted = affine.encryptB(self.field, input_text, a, b)
+        self.text_cipher.setPlainText(encrypted)
 
     def decryptA(self):
         # получить алфавит
@@ -327,7 +336,21 @@ class ProgramWindow(QMainWindow):
         self.text_open.setPlainText(decrypted)
 
     def decryptB(self):
-        pass
+        # получить ключи
+        a = self.check_poly(self.key_a.text())
+        b = self.check_poly(self.key_b.text())
+        if a is None or b is None:
+            return
+
+        input_text = self.text_cipher.toPlainText()
+        try:
+            decrypted = affine.decryptB(self.field, input_text, a, b)
+        except Exception:
+            d = WarnDialog("Ошибка", f"Сообщение повреждено  (ошибка декодирования).")
+            d.exec_()
+            return
+
+        self.text_open.setPlainText(decrypted)
 
 
 if __name__ == "__main__":
